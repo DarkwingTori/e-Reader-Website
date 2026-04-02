@@ -18,6 +18,7 @@ export interface EReaderCard {
   color: string;
   image?: string;
   imageBack?: string;
+  backHorizontal?: boolean;
 }
 
 export interface Series {
@@ -113,6 +114,7 @@ export const CARDS: EReaderCard[] = [
   { id: 'ac-e-s1-D02', cardNumber: 'D02', name: 'Jumpman Mario',   cardType: 'NES Classic', rarity: 'uncommon', unlocks: 'Unlocks Donkey Kong as a playable NES game in Animal Crossing.' },
 ].map(card => ({
   ...card,
+  rarity: card.rarity as CardRarity,
   series: 'Animal Crossing-e Series 1',
   seriesId: 'ac-e-s1',
   region: 'US' as Region,
@@ -122,4 +124,5 @@ export const CARDS: EReaderCard[] = [
   game: 'Animal Crossing',
   image: `${BASE}/150px-Animal_Crossing-e_1-${card.cardNumber}_(${card.name.replace(/ /g, '_')}).jpg`,
   imageBack: `${BASE}/150px-Animal_Crossing-e_1-${card.cardNumber}_(${card.name.replace(/ /g, '_')}_-_Back).jpg`,
+  backHorizontal: ['M01', 'M02', 'M03', 'M04', 'D01', 'D02'].includes(card.cardNumber),
 }));

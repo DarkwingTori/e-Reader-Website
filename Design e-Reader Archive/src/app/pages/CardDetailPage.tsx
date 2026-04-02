@@ -2,13 +2,17 @@ import { useParams, Link } from 'react-router';
 import { CARDS } from '../data/mockData';
 import { RarityBadge, RegionBadge, CardComponent } from '../components/CardComponent';
 import { ArrowLeft, RotateCcw, Bookmark, Heart, Repeat } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function CardDetailPage() {
   const { id } = useParams();
   const card = CARDS.find(c => c.id === id);
   const [flipped, setFlipped] = useState(false);
   const [status, setStatus] = useState(card?.status || null);
+
+  useEffect(() => {
+    setFlipped(false);
+  }, [id]);
 
   if (!card) return (
     <div className="max-w-7xl mx-auto px-4 py-20 text-center">
@@ -32,23 +36,33 @@ export function CardDetailPage() {
             className="aspect-[3/4] rounded-xl overflow-hidden relative cursor-pointer border border-[rgba(160,82,45,0.3)]"
             onClick={() => setFlipped(!flipped)}
             style={{
-              background: flipped
-                ? 'linear-gradient(135deg, #3D2B1F, #A0522D)'
-                : `linear-gradient(135deg, ${card.color}22, ${card.color}55)`,
+              background: `linear-gradient(135deg, ${card.color}22, ${card.color}55)`,
               transition: 'all 0.5s',
             }}
           >
             <div className="h-full flex flex-col items-center justify-center p-8">
               {flipped ? (
-                <>
-                  <p className="text-white/80 mb-2" style={{ fontFamily: 'DM Sans', fontSize: '14px' }}>Dot Code Strip</p>
-                  <div className="w-full max-w-xs h-12 rounded bg-black/30 flex items-center justify-center gap-0.5">
-                    {Array.from({ length: 40 }, (_, i) => (
-                      <div key={i} className="w-1 rounded-full" style={{ height: `${8 + Math.random() * 20}px`, backgroundColor: 'rgba(255,255,255,0.4)' }} />
-                    ))}
-                  </div>
-                  <p className="text-white/50 mt-4" style={{ fontFamily: 'JetBrains Mono', fontSize: '11px' }}>{card.cardNumber}</p>
-                </>
+                card.imageBack ? (
+                  <img
+                    src={card.imageBack}
+                    alt={`${card.name} - back`}
+                    className="absolute inset-0 w-full h-full"
+                    style={{
+                      objectFit: 'contain',
+                      transform: card.backHorizontal ? 'rotate(90deg)' : 'none',
+                    }}
+                  />
+                ) : (
+                  <>
+                    <p className="text-white/80 mb-2" style={{ fontFamily: 'DM Sans', fontSize: '14px' }}>Dot Code Strip</p>
+                    <div className="w-full max-w-xs h-12 rounded bg-black/30 flex items-center justify-center gap-0.5">
+                      {Array.from({ length: 40 }, (_, i) => (
+                        <div key={i} className="w-1 rounded-full" style={{ height: `${8 + Math.random() * 20}px`, backgroundColor: 'rgba(255,255,255,0.4)' }} />
+                      ))}
+                    </div>
+                    <p className="text-white/50 mt-4" style={{ fontFamily: 'JetBrains Mono', fontSize: '11px' }}>{card.cardNumber}</p>
+                  </>
+                )
               ) : card.image ? (
                 <img src={card.image} alt={card.name} className="w-full h-full object-cover absolute inset-0" />
               ) : (
