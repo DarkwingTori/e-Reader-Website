@@ -1,0 +1,27 @@
+# Dependencies
+Design e-Reader Archive/node_modules/
+
+# Build output
+Design e-Reader Archive/dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Supabase (future)
+supabase/.temp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
