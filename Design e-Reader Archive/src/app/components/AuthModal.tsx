@@ -31,7 +31,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!email || !password) {
@@ -42,10 +44,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setError('Please enter a username');
       return;
     }
-    if (mode === 'signin') {
-      login(email, password);
-    } else {
-      signup(email, username, password);
+    setSubmitting(true);
+    const authError = mode === 'signin'
+      ? await login(email, password)
+      : await signup(email, username, password);
+    setSubmitting(false);
+    if (authError) {
+      setError(authError);
+      return;
     }
     onClose();
     setEmail('');
@@ -224,7 +230,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl border-none cursor-pointer transition-opacity hover:opacity-90"
+              disabled={submitting}
+              className="w-full py-3 rounded-xl border-none cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
                 fontFamily: font.body,
                 fontSize: '15px',
@@ -233,7 +240,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 color: '#fff',
               }}
             >
-              {mode === 'signin' ? 'Sign In' : 'Create Account'}
+              {submitting ? 'Please wait…' : mode === 'signin' ? 'Sign In' : 'Create Account'}
             </button>
           </form>
 
@@ -249,7 +256,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             {['Google', 'Nintendo'].map(provider => (
               <button
                 key={provider}
-                onClick={() => { login('social@example.com', 'social'); onClose(); }}
+                onClick={() => setError('Social login coming soon')}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border cursor-pointer transition-colors hover:bg-[#EDE8D5]"
                 style={{
                   fontFamily: font.body,

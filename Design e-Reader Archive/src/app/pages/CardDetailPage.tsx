@@ -1,18 +1,87 @@
 import { useParams, Link } from 'react-router';
-import { CARDS } from '../data/mockData';
+import { supabase, toEReaderCard } from '../../lib/supabase';
+import type { EReaderCard, CardStatus } from '../data/mockData';
 import { RarityBadge, RegionBadge, CardComponent } from '../components/CardComponent';
 import { ArrowLeft, RotateCcw, Bookmark, Heart, Repeat } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useAuth } from '../components/AuthContext';
 
 export function CardDetailPage() {
   const { id } = useParams();
-  const card = CARDS.find(c => c.id === id);
-  const [flipped, setFlipped] = useState(false);
-  const [status, setStatus] = useState(card?.status || null);
+  const { user } = useAuth();
 
+  const [card, setCard] = useState<EReaderCard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [relatedCards, setRelatedCards] = useState<EReaderCard[]>([]);
+  const [flipped, setFlipped] = useState(false);
+  const [status, setStatus] = useState<CardStatus>(null);
+
+  // Fetch card from DB
   useEffect(() => {
+    if (!id) return;
+    setLoading(true);
     setFlipped(false);
+    setStatus(null);
+    supabase
+      .from('cards')
+      .select('*')
+      .eq('id', id)
+      .single()
+      .then(({ data }) => {
+        setCard(data ? toEReaderCard(data) : null);
+        setLoading(false);
+      });
   }, [id]);
+
+  // Fetch related cards once the card is loaded
+  useEffect(() => {
+    if (!card) return;
+    supabase
+      .from('cards')
+      .select('*')
+      .eq('series_id', card.seriesId)
+      .neq('id', card.id)
+      .limit(4)
+      .then(({ data }) => setRelatedCards(data?.map(toEReaderCard) ?? []));
+  }, [card?.seriesId, card?.id]);
+
+  // Fetch collection status for this card if user is logged in
+  useEffect(() => {
+    if (!card || !user) { setStatus(null); return; }
+    supabase
+      .from('collections')
+      .select('status')
+      .eq('card_id', card.id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setStatus((data?.status as CardStatus) ?? null));
+  }, [card?.id, user?.id]);
+
+  const handleStatus = async (key: 'owned' | 'wanted' | 'trade') => {
+    const newStatus = status === key ? null : key;
+    setStatus(newStatus);
+    if (!user || !card) return;
+    if (newStatus === null) {
+      await supabase
+        .from('collections')
+        .delete()
+        .eq('card_id', card.id)
+        .eq('user_id', user.id);
+    } else {
+      await supabase
+        .from('collections')
+        .upsert(
+          { user_id: user.id, card_id: card.id, status: newStatus },
+          { onConflict: 'user_id,card_id' },
+        );
+    }
+  };
+
+  if (loading) return (
+    <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+      <p style={{ color: '#8B7355' }}>Loading card…</p>
+    </div>
+  );
 
   if (!card) return (
     <div className="max-w-7xl mx-auto px-4 py-20 text-center">
@@ -20,8 +89,6 @@ export function CardDetailPage() {
       <Link to="/database" className="text-[#E35336] mt-4 inline-block">Back to Database</Link>
     </div>
   );
-
-  const relatedCards = CARDS.filter(c => c.seriesId === card.seriesId && c.id !== card.id).slice(0, 4);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -117,8 +184,10 @@ export function CardDetailPage() {
             ].map(a => (
               <button
                 key={a.key}
-                onClick={() => setStatus(status === a.key ? null : a.key)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border transition-all"
+                onClick={() => handleStatus(a.key)}
+                disabled={!user}
+                title={!user ? 'Sign in to track your collection' : undefined}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   backgroundColor: status === a.key ? a.color : '#FFFDF5',
                   color: status === a.key ? 'white' : '#A0522D',

@@ -1,6 +1,12 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '../../lib/supabase';
+import type { Session } from '@supabase/supabase-js';
+import type { Database } from '../../types/supabase';
+
+type UserRow = Database['public']['Tables']['users']['Row'];
 
 export interface UserProfile {
+  id: string;
   username: string;
   email: string;
   displayName: string;
@@ -15,39 +21,32 @@ export interface UserProfile {
   recentActivity: { action: string; card: string; date: string }[];
 }
 
-const MOCK_USER: UserProfile = {
-  username: 'dotcode_collector',
-  email: 'collector@ereader.archive',
-  displayName: 'DotCode Collector',
-  avatar: '',
-  joinDate: 'March 2024',
-  bio: 'Passionate e-Reader card collector since 2002. Specializing in Animal Crossing-e and NES Classics series. Always looking to trade!',
-  favoritesSeries: 'Animal Crossing-e',
-  cardsOwned: 247,
-  cardsWanted: 81,
-  completionPct: 68,
-  badges: [
-    { name: 'Early Adopter', icon: '🎮', date: 'Mar 2024' },
-    { name: 'AC Enthusiast', icon: '🍃', date: 'Apr 2024' },
-    { name: '100 Cards Club', icon: '💯', date: 'Jun 2024' },
-    { name: 'NES Master', icon: '🕹️', date: 'Sep 2024' },
-    { name: 'Trade Pioneer', icon: '🤝', date: 'Nov 2024' },
-  ],
-  recentActivity: [
-    { action: 'Added to collection', card: 'K.K. Slider (#001)', date: '2 hours ago' },
-    { action: 'Marked as wanted', card: 'Donkey Kong NES (#012)', date: '5 hours ago' },
-    { action: 'Added to collection', card: 'Portia (#045)', date: '1 day ago' },
-    { action: 'Updated trade list', card: 'Bliss (#089)', date: '2 days ago' },
-    { action: 'Added to collection', card: 'Excitebike (#003)', date: '3 days ago' },
-  ],
-};
+function buildProfile(session: Session, userData: UserRow | null): UserProfile {
+  return {
+    id: session.user.id,
+    username: userData?.username ?? session.user.email?.split('@')[0] ?? 'collector',
+    email: session.user.email ?? '',
+    displayName: userData?.display_name ?? session.user.email?.split('@')[0] ?? 'Collector',
+    avatar: userData?.avatar_url ?? '',
+    joinDate: userData?.created_at
+      ? new Date(userData.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      : '',
+    bio: userData?.bio ?? '',
+    favoritesSeries: userData?.favorite_series ?? '',
+    cardsOwned: 0,
+    cardsWanted: 0,
+    completionPct: 0,
+    badges: [],
+    recentActivity: [],
+  };
+}
 
 interface AuthContextType {
   user: UserProfile | null;
   isLoggedIn: boolean;
-  login: (email: string, password: string) => void;
-  signup: (email: string, username: string, password: string) => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<string | null>;
+  signup: (email: string, username: string, password: string) => Promise<string | null>;
+  logout: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => void;
 }
 
@@ -56,15 +55,58 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
 
-  const login = (_email: string, _password: string) => {
-    setUser(MOCK_USER);
+  useEffect(() => {
+    // Restore existing session on mount
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        setUser(buildProfile(session, userData));
+      }
+    });
+
+    // Keep in sync with auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        setUser(buildProfile(session, userData));
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (email: string, password: string): Promise<string | null> => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return error?.message ?? null;
   };
 
-  const signup = (email: string, username: string, _password: string) => {
-    setUser({ ...MOCK_USER, email, username, displayName: username });
+  const signup = async (email: string, username: string, password: string): Promise<string | null> => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return error.message;
+    if (data.user) {
+      const { error: insertError } = await supabase.from('users').insert({
+        id: data.user.id,
+        username,
+        display_name: username,
+      });
+      if (insertError) return insertError.message;
+    }
+    return null;
   };
 
-  const logout = () => setUser(null);
+  const logout = async () => {
+    await supabase.auth.signOut();
+  };
 
   const updateProfile = (updates: Partial<UserProfile>) => {
     if (user) setUser({ ...user, ...updates });

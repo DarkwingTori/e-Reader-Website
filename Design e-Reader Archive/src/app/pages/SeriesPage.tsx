@@ -1,11 +1,34 @@
 import { useParams, Link } from 'react-router';
-import { SERIES, CARDS } from '../data/mockData';
+import { useState, useEffect } from 'react';
+import { supabase, toEReaderCard, toSeries } from '../../lib/supabase';
+import type { EReaderCard, Series } from '../data/mockData';
 import { CardComponent } from '../components/CardComponent';
 import { ArrowLeft } from 'lucide-react';
 
 export function SeriesPage() {
   const { id } = useParams();
-  const series = SERIES.find(s => s.id === id);
+  const [series, setSeries] = useState<Series | null>(null);
+  const [seriesCards, setSeriesCards] = useState<EReaderCard[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    Promise.all([
+      supabase.from('series').select('*').eq('id', id).single(),
+      supabase.from('cards').select('*').eq('series_id', id).order('card_number'),
+    ]).then(([{ data: seriesData }, { data: cardsData }]) => {
+      setSeries(seriesData ? toSeries(seriesData) : null);
+      setSeriesCards(cardsData?.map(toEReaderCard) ?? []);
+      setLoading(false);
+    });
+  }, [id]);
+
+  if (loading) return (
+    <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+      <p style={{ color: '#8B7355' }}>Loading series…</p>
+    </div>
+  );
 
   if (!series) return (
     <div className="max-w-7xl mx-auto px-4 py-20 text-center">
@@ -13,8 +36,6 @@ export function SeriesPage() {
       <Link to="/database" className="text-[#E35336] mt-4 inline-block">Back to Database</Link>
     </div>
   );
-
-  const seriesCards = CARDS.filter(c => c.seriesId === series.id);
 
   return (
     <div className="min-h-screen">
